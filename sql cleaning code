@@ -1,0 +1,80 @@
+drop table if exists drug_ingredients;
+drop table if exists drugs;
+
+
+CREATE TABLE drugs (
+   application_number TEXT,
+   sponsor_name TEXT,
+   brand_name TEXT,
+   product_number TEXT,
+   reference_drug TEXT,
+   active_ingredients TEXT,
+   reference_standard TEXT,
+   dosage_form TEXT,
+   route TEXT,
+   marketing_status TEXT
+   );
+
+
+
+
+-- (Q2) Load data into the table (\copy ...)
+\copy drugs(application_number, sponsor_name, brand_name, product_number, reference_drug, active_ingredients, reference_standard, dosage_form, route, marketing_status) FROM '/u/af/ao/bptownsley/drugs.csv' DELIMITER ',' CSV HEADER;
+
+
+select application_number, brand_name from drugs;
+
+
+-- any nulls? Yes, these...
+select count(*) from drugs where reference_standard is null; -- 1305 null
+select count(*) from drugs where route is null; -- 92 null
+
+
+-- remove those nulls; reduced data is 47688 observations :)
+delete from drugs where reference_standard is null;
+delete from drugs where route is null;
+
+
+
+
+CREATE TABLE drug_ingredients (
+ application_number TEXT,  -- Foreign key to drugs.appl
+ product_number TEXT,
+ ingredient TEXT,
+ chemical_name TEXT,
+ dosage TEXT
+);
+
+
+INSERT INTO drug_ingredients (application_number, product_number, ingredient, chemical_name, dosage)
+WITH split_ingredients AS (
+ SELECT
+   application_number,
+   product_number,
+   trim(value) AS ingredient
+ FROM drugs,
+ regexp_split_to_table(active_ingredients, ',') WITH ORDINALITY AS t(value, ord)
+)
+SELECT
+ application_number,
+ product_number,
+ ingredient,
+ trim(substring(ingredient FROM '^(.*?) \(')) AS chemical_name,
+ trim(substring(ingredient FROM '\((\d+(\.\d+)?[a-zA-Z%]+)')) AS dosage
+
+
+
+
+FROM split_ingredients;
+
+
+ALTER TABLE drugs
+ADD CONSTRAINT drugs_pkey PRIMARY KEY (application_number, product_number);
+
+
+ALTER TABLE drug_ingredients
+ADD CONSTRAINT fk_drug FOREIGN KEY (application_number, product_number) REFERENCES drugs(application_number, product_number),
+DROP COLUMN ingredient;
+
+
+select * from drug_ingredients;
